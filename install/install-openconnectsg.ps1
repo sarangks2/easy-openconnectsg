@@ -21,7 +21,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$RepoUrl = 'https://github.com/sparklings/openconnectsg.git',
+  [string]$RepoUrl = 'https://github.com/sarangks2/easy-openconnectsg.git',
   [string]$Dest,
   [string]$BinDir,
   [switch]$SkipClone,
@@ -73,7 +73,7 @@ if ($SkipClone) {
   if ([string]::IsNullOrWhiteSpace($RepoUrl)) { throw 'Repository URL is required.' }
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host "git command not found. Downloading repository archive via HTTPS..."
-    $zipUrl = 'https://github.com/sparklings/openconnectsg/archive/refs/heads/main.zip'
+    $zipUrl = 'https://github.com/sarangks2/easy-openconnectsg/archive/refs/heads/main.zip'
     $zipFile = Join-Path $env:TEMP ('openconnectsg_install_' + [guid]::NewGuid().ToString('N') + '.zip')
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
     try {
@@ -86,7 +86,7 @@ if ($SkipClone) {
     New-Item -ItemType Directory -Path $Dest -Force | Out-Null
     Expand-Archive -Path $zipFile -DestinationPath $Dest -Force
     Remove-Item $zipFile -Force -ErrorAction SilentlyContinue
-    $candidate = Join-Path $Dest 'openconnectsg-main'
+    $candidate = Join-Path $Dest 'easy-openconnectsg-main'
     if (Test-Path (Join-Path $candidate 'src\openconnectsg.ps1')) {
       $SourceDir = $candidate
     } else {

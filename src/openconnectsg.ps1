@@ -43,8 +43,8 @@ function Show-Version {
   Write-Host "  Version       : openconnectsg $script:Version" -ForegroundColor Green
   Write-Host "  Binary Path   : $(Join-Path $ocRoot 'bin')" -ForegroundColor DarkCyan
   Write-Host "  Profiles Path : $root" -ForegroundColor DarkCyan
-  Write-Host "  Repository    : https://github.com/sparklings/openconnectsg" -ForegroundColor DarkCyan
-  Write-Host "  Documentation : https://github.com/sparklings/openconnectsg#readme" -ForegroundColor DarkCyan
+  Write-Host "  Repository    : https://github.com/sarangks2/easy-openconnectsg" -ForegroundColor DarkCyan
+  Write-Host "  Documentation : https://github.com/sarangks2/easy-openconnectsg#readme" -ForegroundColor DarkCyan
   Write-Host ""
 }
 
@@ -850,8 +850,8 @@ function Do-Upgrade {
 
   Show-Banner "System Upgrade & Maintenance"
 
-  $repoUrl = 'https://github.com/sparklings/openconnectsg.git'
-  $zipUrl  = 'https://github.com/sparklings/openconnectsg/archive/refs/heads/main.zip'
+  $repoUrl = 'https://github.com/sarangks2/easy-openconnectsg.git'
+  $zipUrl  = 'https://github.com/sarangks2/easy-openconnectsg/archive/refs/heads/main.zip'
   $tempWorkDir = Join-Path $env:TEMP ("openconnectsg_upgrade_" + [guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Path $tempWorkDir -Force | Out-Null
   $sourceDir = $null
@@ -911,7 +911,7 @@ function Do-Upgrade {
 
         Write-Host "   Extracting package files..." -ForegroundColor Gray
         Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
-        $candidateDir = Join-Path $extractDir 'openconnectsg-main'
+        $candidateDir = Join-Path $extractDir 'easy-openconnectsg-main'
         if (-not (Test-Path (Join-Path $candidateDir 'src\openconnectsg.ps1'))) {
           $sub = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
           if ($sub) { $candidateDir = $sub.FullName }
@@ -973,7 +973,7 @@ function Do-Upgrade {
     if (Test-Path $trayPs1)    { Copy-Item $trayPs1 $binDir -Force }
 
     $dateStr = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $marker = "version=$newVer`r`nsource=https://github.com/sparklings/openconnectsg`r`ninstalled=$dateStr`r`n"
+    $marker = "version=$newVer`r`nsource=https://github.com/sarangks2/easy-openconnectsg`r`ninstalled=$dateStr`r`n"
     [System.IO.File]::WriteAllText($installedFile, $marker, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "   Core scripts updated successfully." -ForegroundColor Green
 

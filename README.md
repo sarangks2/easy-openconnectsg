@@ -1,4 +1,6 @@
-# OpenConnectSg
+# Easy OpenConnectSg
+
+> **[sparklings/openconnectsg](https://github.com/sparklings/openconnectsg)의 포크입니다.** 원본 CLI 기능을 그대로 쓰면서 **트레이 UI**(클릭으로 연결/해제, 연결이 쓰는 네트워크와 VPN 대역 계층도 보기)를 추가하고, 재부팅 시 여러 터널이 함께 자동 시작되던 문제를 고쳤습니다. 원본과 같은 [MIT License](LICENSE)를 따릅니다.
 
 > PowerShell automation wrapper for OpenConnect on Windows: DPAPI-secured, NSSM background service daemon with Wintun support and multi-profile management.
 
@@ -13,6 +15,38 @@
 
 ---
 
+## 쉬운 설치 (UI 버전)
+
+Windows 10/11에서 git 같은 개발 도구 없이 설치할 수 있습니다. 둘 중 편한 방법 하나만 하면 됩니다.
+
+### 방법 1. 내려받아 더블클릭
+
+1. **[ZIP 내려받기](https://github.com/sarangks2/easy-openconnectsg/archive/refs/heads/main.zip)** 를 누릅니다.
+2. 받은 `easy-openconnectsg-main.zip`을 우클릭해 **압축 풀기** 합니다.
+3. 압축을 푼 폴더의 `install` 폴더에서 **`install-easy.cmd`를 더블클릭**합니다.
+   - "Windows의 PC 보호" 창이 나오면 **추가 정보 → 실행**을 누릅니다.
+   - 관리자 권한 확인(UAC) 창에서 **예**를 누릅니다.
+4. 설치가 끝나면 트레이 앱이 자동으로 실행됩니다.
+
+### 방법 2. PowerShell 한 줄
+
+시작 메뉴를 우클릭해 **터미널(관리자)** 또는 **Windows PowerShell(관리자)** 를 열고, 아래 한 줄을 붙여 넣습니다.
+
+```powershell
+$d="$env:TEMP\easy-ocsg"; irm https://github.com/sarangks2/easy-openconnectsg/archive/refs/heads/main.zip -OutFile "$d.zip"; Expand-Archive "$d.zip" $d -Force; & "$d\easy-openconnectsg-main\install\install-easy.cmd"
+```
+
+### 설치 후 사용법
+
+1. 시작 메뉴에서 **OpenConnectSg** 를 실행합니다. 화면 오른쪽 아래 알림 영역에 아이콘이 생깁니다.
+2. 처음이면 **[새 프로필…]** 을 눌러 VPN 서버 주소, 계정, 비밀번호를 입력합니다. OpenConnect와 NSSM이 없으면 이때 자동으로 설치됩니다.
+3. 목록에서 프로필을 고르고 **[연결]** 을 누릅니다. 아이콘 색: 초록=연결됨, 노랑=연결 중, 회색=끊김.
+4. 창을 닫아도 트레이에서 계속 실행됩니다. **Windows 로그인 시 트레이 자동 실행**을 체크하면 다음부터 로그인할 때 자동으로 뜹니다.
+
+> 새 버전으로 바꾸려면 위 방법 1이나 2를 다시 하면 됩니다. 등록한 프로필과 비밀번호는 그대로 유지됩니다.
+
+---
+
 ## Key Features
 
 * **멀티 벤더 자동 감지 및 지원**: Cisco AnyConnect (Firepower/ASA) 및 Fortinet FortiGate SSL-VPN 게이트웨이 시그니처를 패킷 및 인증서 레벨에서 자동 판별
@@ -21,6 +55,7 @@
 * **DPAPI 비밀번호 암호화 보관**: Windows DPAPI(`LocalMachine`)를 통해 암호를 `pw.bin`에 암호화 저장하고 `icacls`로 접근을 통제
 * **Wintun 커널 터널링**: WireGuard Wintun 고속 가상 인터페이스와 `vpnc-script-win.js`를 통한 안정적인 Split Routing 구성
 * **단일 터널 보장**: 전역 뮤텍스로 세션 충돌을 원천 방지
+* **트레이 UI**: 클릭으로 연결/해제하고, 연결이 쓰는 네트워크(Wi-Fi/이더넷, VPN IP, VPN 대역 목록과 계층도)와 특정 주소가 나가는 경로를 확인
 
 ---
 
@@ -43,12 +78,12 @@
 
 ## Quick Start
 
-### 1) Clone Repository and System Installation
+### 1) Clone Repository and System Installation (git 사용 시)
 관리자 권한으로 PowerShell 다음의 명령을 실행합니다:
 
 ```powershell
 # 1. 저장소 clone
-git clone https://github.com/sparklings/openconnectsg.git "C:\Program Files\OpenConnect\repo"
+git clone https://github.com/sarangks2/easy-openconnectsg.git "C:\Program Files\OpenConnect\repo"
 
 # 2. 시스템 배포 (C:\Program Files\OpenConnect\bin 자동 배치 및 PATH 등록)
 powershell -ExecutionPolicy Bypass -File "C:\Program Files\OpenConnect\repo\install\install-openconnectsg.ps1"
