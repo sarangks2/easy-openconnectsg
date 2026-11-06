@@ -713,8 +713,10 @@ function Do-Uninstall {
 
   # Remove tray GUI logon task and Start Menu shortcut
   try { Unregister-ScheduledTask -TaskName 'OpenConnectSg Tray' -Confirm:$false -ErrorAction Stop; Write-Host "  Removed tray logon task." } catch { }
-  $lnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\OpenConnectSg.lnk'
-  if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue; Write-Host "  Removed Start Menu shortcut." }
+  foreach ($ln in 'Easy OpenConnectSg.lnk', 'OpenConnectSg.lnk') {
+    $lnk = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$ln"
+    if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue; Write-Host "  Removed Start Menu shortcut ($ln)." }
+  }
 
   # Clean bin folder
   if (Test-Path $binDir) {
@@ -1184,7 +1186,7 @@ function Do-Tray {
   if (-not (Test-Path $trayPs1)) { $trayPs1 = Join-Path $binDir 'openconnectsg-tray.ps1' }
   if (-not (Test-Path $trayPs1)) { Write-Host "Tray GUI not found: $trayPs1" -ForegroundColor Red; return 1 }
   Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$trayPs1`""
-  Write-Host "  OpenConnectSg tray GUI started (see the notification area)." -ForegroundColor Green
+  Write-Host "  Easy OpenConnectSg tray GUI started (see the notification area)." -ForegroundColor Green
   return 0
 }
 

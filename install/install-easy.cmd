@@ -15,6 +15,6 @@ if errorlevel 1 (
 )
 echo.
 echo Done. Starting the OpenConnectSg tray app ...
-echo Next time, open it from the Start menu: OpenConnectSg
+echo Next time, open it from the Start menu: Easy OpenConnectSg
 start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%ProgramFiles%\OpenConnect\bin\openconnectsg-tray.ps1"
 timeout /t 5 >nul

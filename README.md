@@ -38,7 +38,7 @@ $d="$env:TEMP\easy-ocsg"; irm https://github.com/sarangks2/easy-openconnectsg/ar
 
 ### 설치 후 사용법
 
-1. 시작 메뉴에서 **OpenConnectSg** 를 실행합니다. 화면 오른쪽 아래 알림 영역에 아이콘이 생깁니다.
+1. 시작 메뉴에서 **Easy OpenConnectSg** 를 실행합니다. 화면 오른쪽 아래 알림 영역에 아이콘이 생깁니다.
 2. 처음이면 **[새 프로필…]** 을 눌러 VPN 서버 주소, 계정, 비밀번호를 입력합니다. OpenConnect와 NSSM이 없으면 이때 자동으로 설치됩니다.
 3. 목록에서 프로필을 고르고 **[연결]** 을 누릅니다. 아이콘 색: 초록=연결됨, 노랑=연결 중, 회색=끊김.
 4. 창을 닫아도 트레이에서 계속 실행됩니다. **Windows 로그인 시 트레이 자동 실행**을 체크하면 다음부터 로그인할 때 자동으로 뜹니다.
@@ -97,7 +97,7 @@ openconnectsg setup
 > 서버 주소, 포트, 계정, 비밀번호를 입력하면 NSSM·openconnect 의존성 검증, 비밀번호 DPAPI 암호화 및 서비스 등록이 원스톱으로 진행됩니다.
 
 ### 3) Tray GUI (optional)
-시작 메뉴의 **OpenConnectSg** 또는 다음 명령으로 트레이 GUI를 실행합니다:
+시작 메뉴의 **Easy OpenConnectSg** 또는 다음 명령으로 트레이 GUI를 실행합니다:
 ```powershell
 openconnectsg tray
 ```

@@ -26,6 +26,7 @@ $defaultFile = Join-Path $root 'default.txt'
 $cliPs1      = Join-Path $PSScriptRoot 'openconnectsg.ps1'
 if (-not (Test-Path $cliPs1)) { $cliPs1 = Join-Path $binDir 'openconnectsg.ps1' }
 $taskName    = 'OpenConnectSg Tray'
+$appName     = 'Easy OpenConnectSg'   # name shown in the window, tray and dialogs
 
 # --- Elevation: service start/stop needs admin. Re-launch elevated once. ---
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -398,7 +399,7 @@ $stateColors = @{
 }
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'OpenConnectSg'
+$form.Text = $appName
 $form.Font = $font
 $form.Icon = $script:icons.Disconnected
 $form.StartPosition = 'CenterScreen'
@@ -476,7 +477,7 @@ $layout.Controls.Add($foot, 0, 4)
 # Tray icon + menu
 $tray = New-Object System.Windows.Forms.NotifyIcon
 $tray.Icon = $script:icons.Disconnected
-$tray.Text = 'OpenConnectSg'
+$tray.Text = $appName
 $tray.Visible = $true
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $menu.Font = $font
@@ -606,7 +607,7 @@ function Complete-Job {
   Update-All -Force
   if ($code -eq 0) {
     $lblStatus.Text = "$label 완료 ($(Get-Date -Format 'HH:mm:ss'))"
-    $tray.ShowBalloonTip(3000, 'OpenConnectSg', "$label 완료", 'Info')
+    $tray.ShowBalloonTip(3000, $appName, "$label 완료", 'Info')
   } else {
     $reason = ''
     if ($out) {
@@ -614,9 +615,9 @@ function Complete-Job {
       $reason = ($lines | Select-Object -Last 8) -join "`n"
     }
     $lblStatus.Text = "$label 실패 (코드 $code)"
-    $tray.ShowBalloonTip(5000, 'OpenConnectSg', "$label 실패", 'Error')
+    $tray.ShowBalloonTip(5000, $appName, "$label 실패", 'Error')
     $owner = if ($form.Visible) { $form } else { $null }
-    [void][System.Windows.Forms.MessageBox]::Show($owner, "$label 실패 (코드 $code)`n`n$reason", 'OpenConnectSg', 'OK', 'Warning')
+    [void][System.Windows.Forms.MessageBox]::Show($owner, "$label 실패 (코드 $code)`n`n$reason", $appName, 'OK', 'Warning')
   }
 }
 
@@ -695,7 +696,7 @@ function Update-All([switch]$Force) {
              elseif ($list | Where-Object { $_.State -eq 'Connecting' }) { 'Connecting' } else { 'Disconnected' }
   $tray.Icon = $script:icons[$overall]; $form.Icon = $script:icons[$overall]
   $act = $list | Where-Object { $_.State -ne 'Disconnected' } | Select-Object -First 1
-  $tip = if ($act) { "OpenConnectSg - $(Get-StateText $act.State): $($act.Display)" } else { 'OpenConnectSg - 연결 안 됨' }
+  $tip = if ($act) { "$appName - $(Get-StateText $act.State): $($act.Display)" } else { "$appName - 연결 안 됨" }
   $tray.Text = $tip.Substring(0, [Math]::Min(63, $tip.Length))
   if (-not $script:job) {
     if ($isAdmin) { $lblStatus.Text = "갱신 $(Get-Date -Format 'HH:mm:ss')" }
@@ -721,7 +722,7 @@ $btnLog.Add_Click({
     $p = Get-Selected; if (-not $p) { return }
     $log = Join-Path $p.Dir 'logs\out.log'
     if (Test-Path $log) { Start-Process notepad.exe -ArgumentList "`"$log`"" }
-    else { [void][System.Windows.Forms.MessageBox]::Show($form, "로그 파일이 없습니다:`n$log", 'OpenConnectSg') }
+    else { [void][System.Windows.Forms.MessageBox]::Show($form, "로그 파일이 없습니다:`n$log", $appName) }
   })
 $btnAdd.Add_Click({
     # The setup wizard is interactive (password prompt), so it runs in a visible console.
@@ -743,7 +744,7 @@ $tbLook.Add_KeyDown({ if ($_.KeyCode -eq 'Enter') { $_.SuppressKeyPress = $true;
 $chkAuto.Add_Click({
     try { Set-AutoStart $chkAuto.Checked }
     catch {
-      [void][System.Windows.Forms.MessageBox]::Show($form, "자동 실행 설정 실패: $($_.Exception.Message)", 'OpenConnectSg')
+      [void][System.Windows.Forms.MessageBox]::Show($form, "자동 실행 설정 실패: $($_.Exception.Message)", $appName)
     }
     $chkAuto.Checked = Test-AutoStart
   })
@@ -759,7 +760,7 @@ $form.Add_FormClosing({
       $form.Hide()
       if (-not $script:hintShown) {
         $script:hintShown = $true
-        $tray.ShowBalloonTip(2500, 'OpenConnectSg', '트레이에서 계속 실행 중입니다. 아이콘을 클릭하면 창이 열립니다.', 'Info')
+        $tray.ShowBalloonTip(2500, $appName, '트레이에서 계속 실행 중입니다. 아이콘을 클릭하면 창이 열립니다.', 'Info')
       }
     }
   })

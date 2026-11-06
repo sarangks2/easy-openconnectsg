@@ -118,13 +118,15 @@ if (Test-Path $traySrc) {
   Copy-Item $traySrc $BinDir -Force
   # Start Menu shortcut for the tray GUI (all users)
   try {
-    $lnkPath = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\OpenConnectSg.lnk'
+    $startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    Remove-Item (Join-Path $startMenu 'OpenConnectSg.lnk') -Force -ErrorAction SilentlyContinue   # pre-rename shortcut
+    $lnkPath = Join-Path $startMenu 'Easy OpenConnectSg.lnk'
     $wsh = New-Object -ComObject WScript.Shell
     $lnk = $wsh.CreateShortcut($lnkPath)
     $lnk.TargetPath = (Get-Command powershell.exe).Source
     $lnk.Arguments  = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $BinDir 'openconnectsg-tray.ps1')`""
     $lnk.WorkingDirectory = $BinDir
-    $lnk.Description = 'OpenConnectSg VPN tray'
+    $lnk.Description = 'Easy OpenConnectSg VPN tray'
     $lnk.IconLocation = "$env:SystemRoot\System32\shell32.dll,18"
     $lnk.Save()
     Write-Host "Start Menu shortcut created: $lnkPath"
