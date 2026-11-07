@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   openconnectsg-tray - System tray GUI for OpenConnectSg.
@@ -366,6 +366,39 @@ function Set-AutoStart([bool]$on) {
 }
 
 # ============================================================================
+#  Boot Auto-Start for VPN services
+# ============================================================================
+$autostartDisabledFile = Join-Path $ocRoot 'autostart_disabled.flag'
+
+function Test-BootAutoStart {
+  if (Test-Path $autostartDisabledFile) { return $false }
+  $autoSvc = Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue | Where-Object { $_.StartType -eq 'Automatic' }
+  return [bool]$autoSvc
+}
+
+function Set-BootAutoStart([bool]$on) {
+  if (-not $on) {
+    foreach ($s in @(Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue)) {
+      try { Set-Service -Name $s.Name -StartupType Manual -ErrorAction Stop } catch {}
+    }
+    try { Set-Content -Path $autostartDisabledFile -Value 'disabled' -Encoding ascii } catch {}
+  } else {
+    try { Remove-Item -Path $autostartDisabledFile -Force -ErrorAction SilentlyContinue } catch {}
+    $p = Get-Selected
+    if (-not $p) {
+      $p = $script:profiles | Where-Object { $_.IsDefault } | Select-Object -First 1
+    }
+    if (-not $p -and $script:profiles.Count -gt 0) { $p = $script:profiles[0] }
+    if ($p) {
+      foreach ($s in @(Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue)) {
+        $want = if ($s.Name -eq $p.Name) { 'Automatic' } else { 'Manual' }
+        try { Set-Service -Name $s.Name -StartupType $want -ErrorAction Stop } catch {}
+      }
+    }
+  }
+}
+
+# ============================================================================
 #  UI
 # ============================================================================
 $font     = New-Object System.Drawing.Font('Malgun Gothic', 9)
@@ -468,10 +501,13 @@ $layout.Controls.Add($lookBar, 0, 3)
 $foot = New-Object System.Windows.Forms.FlowLayoutPanel
 $foot.Dock = 'Fill'; $foot.AutoSize = $true; $foot.WrapContents = $false
 $chkAuto = New-Object System.Windows.Forms.CheckBox
-$chkAuto.Text = 'Windows 로그인 시 트레이 자동 실행'; $chkAuto.AutoSize = $true
+$chkAuto.Text = '로그인 시 트레이 자동 실행'; $chkAuto.AutoSize = $true
+$chkBootAuto = New-Object System.Windows.Forms.CheckBox
+$chkBootAuto.Text = '부팅 시 VPN 자동 연결'; $chkBootAuto.AutoSize = $true
+$chkBootAuto.Margin = New-Object System.Windows.Forms.Padding(16, 0, 0, 0)
 $lblStatus = New-Object System.Windows.Forms.Label
 $lblStatus.AutoSize = $true; $lblStatus.Margin = '16,4,0,0'; $lblStatus.ForeColor = [System.Drawing.Color]::DimGray
-$foot.Controls.AddRange(@($chkAuto, $lblStatus))
+$foot.Controls.AddRange(@($chkAuto, $chkBootAuto, $lblStatus))
 $layout.Controls.Add($foot, 0, 4)
 
 # Tray icon + menu
@@ -523,6 +559,8 @@ function Update-Buttons {
   $btnAdd.Enabled        = $isAdmin -and -not $busy
   $btnLog.Enabled        = [bool]$p
   $chkAuto.Enabled       = $isAdmin
+  $chkBootAuto.Enabled   = $isAdmin -and -not $busy
+  $chkBootAuto.Checked   = Test-BootAutoStart
 }
 
 # The report queries routing/adapters (seconds on a cold start), so it runs in a
@@ -623,6 +661,15 @@ function Complete-Job {
 
 function Do-ConnectProfile($p) {
   if (-not $p) { return }
+  $running = @($script:profiles | Where-Object { $_.Name -ne $p.Name -and $_.State -ne 'Disconnected' })
+  if ($running.Count -gt 0) {
+    $runningNames = ($running | ForEach-Object { $_.Display }) -join ', '
+    $msg = "현재 '$runningNames'에 연결되어 있습니다.`n`n네트워크 충돌을 방지하기 위해 기존 연결을 종료하고 '$($p.Display)'(으)로 전환하시겠습니까?"
+    $ans = [System.Windows.Forms.MessageBox]::Show($form, $msg, "$appName - 프로필 전환 확인", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) {
+      return
+    }
+  }
   Invoke-Cli "'$($p.Display)' 연결" @('connect', $p.Name)
 }
 function Do-DisconnectProfile($p) {
@@ -749,6 +796,17 @@ $chkAuto.Add_Click({
     $chkAuto.Checked = Test-AutoStart
   })
 
+$chkBootAuto.Add_Click({
+    try {
+      Set-BootAutoStart $chkBootAuto.Checked
+      $lblStatus.Text = if ($chkBootAuto.Checked) { "부팅 시 VPN 자동 연결 활성화됨" } else { "부팅 시 VPN 자동 연결 비활성화됨" }
+      Update-All -Force
+    } catch {
+      [void][System.Windows.Forms.MessageBox]::Show($form, "부팅 자동 실행 설정 실패: $($_.Exception.Message)", $appName)
+    }
+    $chkBootAuto.Checked = Test-BootAutoStart
+  })
+
 $tray.Add_MouseClick({ if ($_.Button -eq 'Left') { Show-Main } })
 $tray.Add_BalloonTipClicked({ Show-Main })
 
@@ -786,6 +844,7 @@ $form.Add_Shown({
     try { Update-All -Force } catch { $lblStatus.Text = "갱신 오류: $($_.Exception.Message)" }
   })
 $chkAuto.Checked = Test-AutoStart
+$chkBootAuto.Checked = Test-BootAutoStart
 
 if ($Hidden) {
   # Build state without showing the window

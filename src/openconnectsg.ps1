@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   openconnectsg - Unified CLI tool for OpenConnect VPN profile management and service orchestration.
@@ -22,6 +22,7 @@ $nssmDir      = Join-Path $programFiles 'nssm'
 $nssm         = Join-Path $nssmDir 'nssm.exe'
 $binDir       = Join-Path $ocRoot 'bin'
 $defaultFile  = Join-Path $root 'default.txt'
+$autostartDisabledFile = Join-Path $ocRoot 'autostart_disabled.flag'
 
 function Show-Banner {
   param([string]$SubTitle = "Windows Background Daemon & DPAPI Automation Wrapper")
@@ -191,6 +192,13 @@ function Invoke-Nssm {
 # so that a reboot never brings up multiple tunnels at once.
 function Set-AutoStartProfile {
   param([string]$Name)
+  if (Test-Path $autostartDisabledFile) {
+    # If globally disabled, keep all openconnect services Manual
+    foreach ($s in @(Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue)) {
+      try { Set-Service -Name $s.Name -StartupType Manual -ErrorAction Stop } catch { }
+    }
+    return
+  }
   foreach ($s in @(Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue)) {
     $want = if ($s.Name -eq $Name) { 'Automatic' } else { 'Manual' }
     try { Set-Service -Name $s.Name -StartupType $want -ErrorAction Stop } catch { }
@@ -536,6 +544,89 @@ function Do-Default {
   Write-Host " ==============================================================================" -ForegroundColor DarkGray
   Write-Host "   Default Profile : $($t.Name)" -ForegroundColor White
   Write-Host "   Alias / User    : $(if ($t.Alias) { $t.Alias } else { '(none)' }) ($($t.User))" -ForegroundColor Green
+  Write-Host " ==============================================================================" -ForegroundColor DarkGray
+  Write-Host ""
+  return 0
+}
+
+function Do-AutoStart {
+  param($profiles, $token)
+
+  # Status view
+  if ([string]::IsNullOrWhiteSpace($token) -or $token.ToLower() -eq 'status') {
+    Write-Host ""
+    Write-Host " ==============================================================================" -ForegroundColor DarkGray
+    Write-Host "  OpenConnectSg :: Boot Auto-Start Configuration" -ForegroundColor White
+    Write-Host " ==============================================================================" -ForegroundColor DarkGray
+
+    $isDisabled = Test-Path $autostartDisabledFile
+    if ($isDisabled) {
+      Write-Host "  Global Boot Auto-Start : [DISABLED] (All tunnels remain Manual on boot)" -ForegroundColor Yellow
+    } else {
+      Write-Host "  Global Boot Auto-Start : [ENABLED]" -ForegroundColor Green
+    }
+    Write-Host ""
+    Write-Host "  #   ALIAS / NAME                             STARTUP TYPE   STATUS" -ForegroundColor DarkGray
+    Write-Host " ------------------------------------------------------------------------------" -ForegroundColor DarkGray
+
+    $idx = 1
+    foreach ($p in $profiles) {
+      $svc = Get-Service -Name $p.Name -ErrorAction SilentlyContinue
+      $stType = if ($svc) { [string]$svc.StartType } else { 'N/A' }
+      $status = if ($svc) { [string]$svc.Status } else { 'N/A' }
+      $stColor = if ($stType -eq 'Automatic') { 'Green' } else { 'DarkGray' }
+      $aliasText = if ($p.Alias) { "$($p.Alias) ($($p.Name))" } else { $p.Name }
+      if ($aliasText.Length -gt 38) { $aliasText = $aliasText.Substring(0, 35) + "..." }
+
+      $line = "  {0,-3} {1,-40} {2,-14} {3}" -f $idx, $aliasText, $stType, $status
+      Write-Host $line -ForegroundColor $stColor
+      $idx++
+    }
+    Write-Host " ------------------------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "  Commands:" -ForegroundColor DarkCyan
+    Write-Host "    openconnectsg autostart off         : Disable boot auto-start for all profiles" -ForegroundColor Gray
+    Write-Host "    openconnectsg autostart <profile>   : Set specific profile to auto-start on boot" -ForegroundColor Gray
+    Write-Host " ==============================================================================" -ForegroundColor DarkGray
+    Write-Host ""
+    return 0
+  }
+
+  # Turn off boot auto-start
+  if ($token.ToLower() -in @('off', 'disable', 'none', 'stop')) {
+    Assert-Admin
+    foreach ($s in @(Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue)) {
+      try { Set-Service -Name $s.Name -StartupType Manual -ErrorAction Stop } catch {}
+    }
+    try { Set-Content -Path $autostartDisabledFile -Value 'disabled' -Encoding ascii } catch {}
+
+    Write-Host ""
+    Write-Host " ==============================================================================" -ForegroundColor DarkGray
+    Write-Host "  OpenConnectSg :: Boot Auto-Start Disabled" -ForegroundColor Yellow
+    Write-Host " ==============================================================================" -ForegroundColor DarkGray
+    Write-Host "   Boot auto-start has been disabled for all profiles." -ForegroundColor White
+    Write-Host "   All openconnect_* services set to [Manual]." -ForegroundColor Gray
+    Write-Host "   No VPN tunnels will automatically start on Windows boot." -ForegroundColor Green
+    Write-Host " ==============================================================================" -ForegroundColor DarkGray
+    Write-Host ""
+    return 0
+  }
+
+  # Enable boot auto-start for specific profile
+  Assert-Admin
+  $t = Resolve-Profile $profiles $token
+  if (Test-Path $autostartDisabledFile) {
+    try { Remove-Item $autostartDisabledFile -Force -ErrorAction SilentlyContinue } catch {}
+  }
+  Set-AutoStartProfile $t.Name
+
+  Write-Host ""
+  Write-Host " ==============================================================================" -ForegroundColor DarkGray
+  Write-Host "  OpenConnectSg :: Boot Auto-Start Configured" -ForegroundColor Green
+  Write-Host " ==============================================================================" -ForegroundColor DarkGray
+  Write-Host "   Target Profile : $($t.Name)" -ForegroundColor White
+  Write-Host "   Alias / User   : $(if ($t.Alias) { $t.Alias } else { '(none)' }) ($($t.User))" -ForegroundColor DarkCyan
+  Write-Host "   Startup Type   : [Automatic] (Will start on Windows boot)" -ForegroundColor Green
+  Write-Host "   Other Profiles : [Manual] (Will not start on boot)" -ForegroundColor Gray
   Write-Host " ==============================================================================" -ForegroundColor DarkGray
   Write-Host ""
   return 0
@@ -1203,6 +1294,7 @@ Usage:
   openconnectsg tray                      Open the tray GUI (connect/disconnect, network view)
   openconnectsg alias <profile> <alias>   Assign friendly alias to profile
   openconnectsg default <profile>         Set default profile
+  openconnectsg autostart [<profile>|off] Set or disable boot auto-start profile
   openconnectsg remove <profile>          Remove profile and unregister Windows service
   openconnectsg upgrade [<source>] [--force] Upgrade openconnectsg system binaries (skip if current)
   openconnectsg uninstall [<scope>]       Uninstall openconnectsg (scope: app or full)
@@ -1243,6 +1335,8 @@ try {
     'alias'        { $exitCode = Do-Alias      (Get-Profiles) $a1 $a2 }
     'label'        { $exitCode = Do-Alias      (Get-Profiles) $a1 $a2 } # Compatibility alias
     'default'      { $exitCode = Do-Default    (Get-Profiles) $a1 }
+    'autostart'    { $exitCode = Do-AutoStart  (Get-Profiles) $a1 }
+    'boot'         { $exitCode = Do-AutoStart  (Get-Profiles) $a1 }
     'remove'       { $exitCode = Do-Remove     (Get-Profiles) $a1 }
     'rm'           { $exitCode = Do-Remove     (Get-Profiles) $a1 }
     'delete'       { $exitCode = Do-Remove     (Get-Profiles) $a1 }

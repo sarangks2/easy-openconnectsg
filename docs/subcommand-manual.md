@@ -293,7 +293,25 @@ openconnectsg <서브커맨드> [인자1] [인자2] ...
 
 ---
 
-### 3.8. `remove` / `rm` / `delete` (Delete Profile & Service)
+### 3.8. `autostart` / `boot` (Configure Boot Auto-Start)
+
+PC 부팅 시 VPN 터널의 자동 연결(Windows Service `Automatic` / `Manual`) 여부를 제어하고 상태를 확인합니다.
+
+- **문법**:
+  ```powershell
+  openconnectsg autostart                     # 현재 부팅 자동 연결 상태 확인
+  openconnectsg autostart status              # 상태 확인 (동일)
+  openconnectsg autostart off                 # 모든 프로필의 부팅 자동 연결 해제 (전역 OFF)
+  openconnectsg autostart <profile>           # 특정 프로필을 부팅 자동 연결로 지정
+  ```
+- **주요 동작**:
+  1. `autostart off`: 모든 `openconnect_*` 윈도우 서비스를 `Manual`로 변경하고 전역 비활성 플래그를 설정하여, 부팅 시 어떠한 터널도 자동으로 실행되지 않도록 차단합니다.
+  2. `autostart <profile>`: 지정한 프로필만 `Automatic`으로 변경하고 다른 모든 프로필은 `Manual`로 설정합니다.
+  3. 트레이 GUI(`openconnectsg tray`)의 하단 `[ ] 부팅 시 VPN 자동 연결` 체크박스와 실시간 동기화됩니다.
+
+---
+
+### 3.9. `remove` / `rm` / `delete` (Delete Profile & Service)
 
 등록된 프로필 구성 및 윈도우 서비스를 완전히 삭제합니다.
 
