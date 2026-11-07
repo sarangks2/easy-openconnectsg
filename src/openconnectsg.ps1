@@ -171,6 +171,28 @@ function Resolve-Profile {
   throw ("Multiple profiles match '{0}'. Please be more specific: {1}" -f $token, (($hit | ForEach-Object { $_.Name }) -join ', '))
 }
 
+function Assert-Admin {
+  param([string[]]$CurrentArgs)
+  $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+  $p  = New-Object System.Security.Principal.WindowsPrincipal($id)
+  if (-not $p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    if ($CurrentArgs -and $CurrentArgs.Count -gt 0) {
+      $scriptPath = $PSCommandPath
+      if (-not $scriptPath) { $scriptPath = Join-Path $PSScriptRoot 'openconnectsg.ps1' }
+      $escapedArgs = $CurrentArgs | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }
+      $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"") + $escapedArgs
+      try {
+        $proc = Start-Process powershell.exe -Verb RunAs -ArgumentList $argList -PassThru -Wait
+        exit $proc.ExitCode
+      } catch {
+        throw "Administrative privileges are required. Elevation request failed: $($_.Exception.Message)"
+      }
+    } else {
+      throw "Administrative privileges are required. Please run from an elevated administrator shell."
+    }
+  }
+}
+
 function Assert-Nssm {
   if (-not (Test-Path $nssm)) {
     throw "NSSM binary not found at $nssm. Please run 'openconnectsg setup' first."
@@ -593,7 +615,7 @@ function Do-AutoStart {
 
   # Turn off boot auto-start
   if ($token.ToLower() -in @('off', 'disable', 'none', 'stop')) {
-    Assert-Admin
+    Assert-Admin @('autostart', $token)
     foreach ($s in @(Get-Service -Name 'openconnect_*' -ErrorAction SilentlyContinue)) {
       try { Set-Service -Name $s.Name -StartupType Manual -ErrorAction Stop } catch {}
     }
@@ -612,7 +634,7 @@ function Do-AutoStart {
   }
 
   # Enable boot auto-start for specific profile
-  Assert-Admin
+  Assert-Admin @('autostart', $token)
   $t = Resolve-Profile $profiles $token
   if (Test-Path $autostartDisabledFile) {
     try { Remove-Item $autostartDisabledFile -Force -ErrorAction SilentlyContinue } catch {}
