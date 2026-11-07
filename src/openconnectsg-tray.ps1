@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   openconnectsg-tray - System tray GUI for OpenConnectSg.
@@ -666,9 +666,7 @@ function Do-ConnectProfile($p) {
     $runningNames = ($running | ForEach-Object { $_.Display }) -join ', '
     $msg = "현재 '$runningNames'에 연결되어 있습니다.`n`n네트워크 충돌을 방지하기 위해 기존 연결을 종료하고 '$($p.Display)'(으)로 전환하시겠습니까?"
     $ans = [System.Windows.Forms.MessageBox]::Show($form, $msg, "$appName - 프로필 전환 확인", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
-    if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) {
-      return
-    }
+    if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) { return }
   }
   Invoke-Cli "'$($p.Display)' 연결" @('connect', $p.Name)
 }
@@ -799,7 +797,7 @@ $chkAuto.Add_Click({
 $chkBootAuto.Add_Click({
     try {
       Set-BootAutoStart $chkBootAuto.Checked
-      $lblStatus.Text = if ($chkBootAuto.Checked) { "부팅 시 VPN 자동 연결 활성화됨" } else { "부팅 시 VPN 자동 연결 비활성화됨" }
+      $lblStatus.Text = if ($chkBootAuto.Checked) { '부팅 시 VPN 자동 연결 활성화됨' } else { '부팅 시 VPN 자동 연결 비활성화됨' }
       Update-All -Force
     } catch {
       [void][System.Windows.Forms.MessageBox]::Show($form, "부팅 자동 실행 설정 실패: $($_.Exception.Message)", $appName)
