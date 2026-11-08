@@ -7,20 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v0.1.4] - 2026-11-08
 
 ### Added
 - **Interactive Graphical Route Tree & Flow Banner (`src/openconnectsg-tray.ps1`)**: Upgraded the network view into a 2-tab interface: **[그래픽 계층도]** (Visual Tree & Flow) and **[텍스트 요약]** (Raw Text Report). Replaced plain monospace text representation with a Windows Forms `TreeView` featuring collapsible private subnet folders, bold dark-green active VPN routes, and blue internet route. Added an interactive network flow banner panel showing real-time path visualization (`[내 PC] ━━▶ [🔒 VPN 터널] ━━▶ [🏢 사설 업무망]`) and bidirectional route lookup synchronization (clicking a node auto-fills the lookup box, and querying an IP automatically locates and expands the matching route node).
-- **Tray GUI (`src/openconnectsg-tray.ps1`, `openconnectsg tray`)**: WinForms window with a notification-area icon (green = connected, yellow = connecting, gray = disconnected). Connect/disconnect profiles from the window or the tray menu; closing the window keeps it running in the tray. Optional "start at Windows logon" checkbox registers a highest-privilege scheduled task so no UAC prompt appears at login. The installer copies the GUI and adds an `OpenConnectSg` Start Menu shortcut; uninstall removes both.
-- **Route hierarchy view**: Below the existing split-tunnel route list, the network view draws the routed subnets as a tree (private 10/8, 172.16/12, 192.168/16 and per-first-octet groups, nested by containment, with 2+ subnets sharing a /16 bundled), each annotated with its address range.
-- **Network view**: For the selected profile, shows the physical adapter/network (e.g. Wi-Fi SSID, source IP, gateway) used to reach the VPN server, the tunnel adapter and VPN IP, DNS, whether it is a full or split tunnel with the list of routed subnets, and where all other traffic goes. A lookup box shows which network any address or hostname would use.
+- **Boot Auto-Start Management (`openconnectsg autostart`, `src/openconnectsg.ps1`)**: Query and toggle boot auto-start per profile or disable all with `openconnectsg autostart [<profile>|off]`. Integrated auto-elevation helper (`Assert-Admin`) for non-admin consoles and added a boot auto-start checkbox in the tray GUI.
+- **Profile Switch Safety Dialog**: Added confirmation popup in the tray GUI when attempting to connect to another profile while a tunnel is active, preventing accidental disconnections and IP routing conflicts.
+- **Easy UI One-Click Installer (`install/install-easy.cmd`)**: Double-click installer that self-elevates, stops any running tray instances gracefully, deploys system binaries to `C:\Program Files\OpenConnect\bin`, registers system PATH, creates the `Easy OpenConnectSg` Start Menu shortcut, and starts the tray application.
+- **Tray GUI (`src/openconnectsg-tray.ps1`, `openconnectsg tray`)**: WinForms window with a notification-area icon (green = connected, yellow = connecting, gray = disconnected). Connect/disconnect profiles from the window or the tray menu; closing the window keeps it running in the tray. Optional "start at Windows logon" checkbox registers a highest-privilege scheduled task so no UAC prompt appears at login.
+- **Network View & Route Tree**: For the selected profile, shows the physical adapter/network used to reach the VPN server, tunnel adapter and VPN IP, DNS, full/split tunnel routes, and route lookup tool.
 
 ### Fixed
-- **Tray responsiveness**: the network report (route/adapter queries take seconds on a cold start) now runs in a background runspace with module warm-up, so the window, polling timers and second-launch re-show are never blocked. The report refreshes 5/15/30 s after a state change, every 5 s while routes are still missing, and every 60 s while connected.
-- **Tray action result**: `Start-Process -PassThru` reports an empty `ExitCode` on PowerShell 5.1 unless its handle is touched; successful connect/disconnect were shown as failures with a modal error that left the Connect button disabled.
-- **Close-to-tray**: closing the window always hides it to the tray unless the tray's own Exit, Windows shutdown or Task Manager closes it; unhandled UI exceptions are logged to `%TEMP%\openconnectsg-tray-error.log` instead of ending the process.
-- **Single auto-start tunnel**: `connect`, `default` and `setup` now leave only the chosen profile's service on Automatic start and set all others to Manual (setup also stops other running tunnels), so a reboot no longer brings up several tunnels at once.
-- **Installer self-deletion**: the installer no longer re-clones over (and deletes) the repository it runs from when `-RepoUrl` is left at its default.
+- **Korean UTF-8 BOM Encoding**: Preserved UTF-8 BOM encoding for PowerShell 5.1 compatibility to prevent Korean UI and dialog text corruption.
+- **Tray Responsiveness**: Background runspace execution with network module warm-up to eliminate UI freezing during network adapter and route discovery.
+- **Tray Action Result**: Fixed PowerShell 5.1 process handle bug where `ExitCode` was reported as `$null` causing false failure reports.
+- **Close-to-Tray**: Improved close event handling so only the tray menu's Exit or system shutdown terminates the app.
+- **Single Auto-Start Tunnel**: Ensured only the chosen profile service runs on Automatic start to prevent simultaneous tunnel conflicts upon reboot.
 
 ---
 

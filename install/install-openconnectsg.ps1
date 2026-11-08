@@ -108,6 +108,11 @@ $initSrc = Join-Path $srcBin 'init-openconnectsg.ps1'
 if (-not (Test-Path (Join-Path $srcBin 'openconnectsg.ps1'))) { throw "Required binary not found in $srcBin" }
 if (-not (Test-Path $initSrc))                               { throw "Setup wizard script not found in $srcBin" }
 
+# Stop running tray instances during upgrade so binaries can be overwritten cleanly
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'openconnectsg-tray' } | ForEach-Object {
+  try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+}
+
 New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 Copy-Item (Join-Path $srcBin 'openconnectsg.ps1')     $BinDir -Force
 Copy-Item (Join-Path $srcBin 'openconnectsg.cmd')     $BinDir -Force
@@ -147,7 +152,7 @@ if (-not (($mp -split ';') -contains $BinDir)) {
 $cmd = Join-Path $BinDir 'openconnectsg.cmd'
 if (Test-Path $cmd) {
   $deployedPs1 = Join-Path $BinDir 'openconnectsg.ps1'
-  $ver = '0.1.3b'
+  $ver = '0.1.4'
   if (Test-Path $deployedPs1) {
     $vLine = Get-Content $deployedPs1 -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\$script:Version\s*=\s*[''"]([^''"]+)[''"]' } | Select-Object -First 1
     if ($vLine -and $vLine -match '^\$script:Version\s*=\s*[''"]([^''"]+)[''"]') {
