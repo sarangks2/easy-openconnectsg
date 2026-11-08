@@ -139,6 +139,15 @@ if (Test-Path $traySrc) {
 }
 Write-Host "Files deployed successfully to $BinDir"
 
+# Automatically launch the updated tray application
+$deployedTray = Join-Path $BinDir 'openconnectsg-tray.ps1'
+if (Test-Path $deployedTray) {
+  try {
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$deployedTray`""
+    Write-Host "Started Easy OpenConnectSg tray application." -ForegroundColor Green
+  } catch {}
+}
+
 # Register system PATH (duplicate prevention)
 $mp = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 if (-not (($mp -split ';') -contains $BinDir)) {

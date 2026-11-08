@@ -2,7 +2,7 @@
 rem Easy OpenConnectSg installer: double-click to install (asks for administrator rights once).
 net session >nul 2>&1
 if errorlevel 1 (
-  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  powershell -NoProfile -Command "Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '\"\"%~dp0install-openconnectsg.ps1\"\"'"
   exit /b
 )
 echo Installing Easy OpenConnectSg ...
