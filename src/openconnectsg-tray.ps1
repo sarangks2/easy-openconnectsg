@@ -297,8 +297,205 @@ function Format-RouteTree([string[]]$routes) {
   return $out
 }
 
+function Build-RouteTreeNodeData([string[]]$routes) {
+  $nodes = @($routes | ForEach-Object { ConvertTo-Net $_ } | Sort-Object Len, Net)
+  $groups = New-Object System.Collections.ArrayList
+  foreach ($g in @(@('10.0.0.0/8', '사설'), @('172.16.0.0/12', '사설'), @('192.168.0.0/16', '사설'))) {
+    $gn = ConvertTo-Net $g[0]
+    if ($nodes | Where-Object { Test-NetContains $gn $_ }) { [void]$groups.Add([pscustomobject]@{ N = $gn; Kind = $g[1] }) }
+  }
+  foreach ($n in $nodes) {
+    if ($groups | Where-Object { Test-NetContains $_.N $n }) { continue }
+    $first = "$($n.Prefix.Split('.')[0]).0.0.0/8"
+    if (-not ($groups | Where-Object { $_.N.Prefix -eq $first })) {
+      [void]$groups.Add([pscustomobject]@{ N = (ConvertTo-Net $first); Kind = '공인' })
+    }
+  }
+  $groups = @($groups | Sort-Object { $_.N.Net })
+
+  $tree = @{}
+  $all = @()
+  foreach ($g in $groups) {
+    $isRoute = [bool]($nodes | Where-Object { $_.Prefix -eq $g.N.Prefix })
+    $all += [pscustomobject]@{ N = $g.N; Virtual = -not $isRoute; Kind = $g.Kind }
+  }
+  foreach ($n in $nodes) {
+    if ($all | Where-Object { $_.N.Prefix -eq $n.Prefix }) { continue }
+    $all += [pscustomobject]@{ N = $n; Virtual = $false; Kind = '' }
+  }
+  $by16 = $nodes | Where-Object { $_.Len -gt 16 } | Group-Object { $o = $_.Prefix.Split('.'); "$($o[0]).$($o[1]).0.0/16" }
+  foreach ($g in $by16) {
+    if ($g.Count -lt 2) { continue }
+    $n16 = ConvertTo-Net $g.Name
+    if ($all | Where-Object { $_.N.Len -le 16 -and $_.N.Len -gt 8 -and -not $_.Virtual -and (Test-NetContains $_.N $n16) }) { continue }
+    $all += [pscustomobject]@{ N = $n16; Virtual = $true; Kind = '' }
+  }
+  $roots = @()
+  foreach ($x in $all) {
+    $parent = $all | Where-Object { $_ -ne $x -and $_.N.Len -lt $x.N.Len -and (Test-NetContains $_.N $x.N) -and
+        -not ($_.Kind -eq '공인' -and $x.Kind -eq '사설') -and
+        -not ($_.Kind -eq '공인' -and ($all | Where-Object { $_.Kind -eq '사설' -and (Test-NetContains $_.N $x.N) })) } |
+      Sort-Object { $_.N.Len } -Descending | Select-Object -First 1
+    if ($parent) {
+      if (-not $tree.ContainsKey($parent.N.Prefix)) { $tree[$parent.N.Prefix] = @() }
+      $tree[$parent.N.Prefix] += $x
+    } else { $roots += $x }
+  }
+  return [pscustomobject]@{ Roots = @($roots | Sort-Object { $_.N.Net }); Tree = $tree }
+}
+
+function Populate-RouteTreeView($tv, $repObj) {
+  $tv.BeginUpdate()
+  $tv.Nodes.Clear()
+
+  if (-not $repObj -or $repObj.State -eq 'None') {
+    $n = New-Object System.Windows.Forms.TreeNode('프로필을 선택하세요.')
+    $n.ForeColor = [System.Drawing.Color]::Gray
+    [void]$tv.Nodes.Add($n)
+    $tv.EndUpdate()
+    return
+  }
+
+  if ($repObj.State -eq 'Disconnected') {
+    $n = New-Object System.Windows.Forms.TreeNode('▶ VPN에 연결되어 있지 않습니다 (모든 트래픽이 일반 로컬 인터넷 사용)')
+    $n.ForeColor = [System.Drawing.Color]::DimGray
+    [void]$tv.Nodes.Add($n)
+    if ($repObj.GWPath) {
+      $gwNode = New-Object System.Windows.Forms.TreeNode("   🌐 게이트웨이 경로: $($repObj.GWPath)")
+      $gwNode.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+      [void]$tv.Nodes.Add($gwNode)
+    }
+    $tv.EndUpdate()
+    return
+  }
+
+  if ($repObj.State -eq 'Connecting') {
+    $n = New-Object System.Windows.Forms.TreeNode('⏳ VPN 터널 어댑터가 아직 올라오지 않았습니다 (인증/재연결 중)…')
+    $n.ForeColor = [System.Drawing.Color]::DarkOrange
+    [void]$tv.Nodes.Add($n)
+    $tv.EndUpdate()
+    return
+  }
+
+  if ($repObj.IsFullTunnel) {
+    $n = New-Object System.Windows.Forms.TreeNode('🔒 모든 인터넷/사설 트래픽이 VPN으로 전송됩니다 (Full Tunnel: 0.0.0.0/0)')
+    $n.ForeColor = [System.Drawing.Color]::DarkGreen
+    $n.NodeFont = New-Object System.Drawing.Font($tv.Font, [System.Drawing.FontStyle]::Bold)
+    [void]$tv.Nodes.Add($n)
+    $tv.EndUpdate()
+    return
+  }
+
+  $routes = @($repObj.Routes)
+  if (-not $routes -or $routes.Count -eq 0) {
+    $n = New-Object System.Windows.Forms.TreeNode('⏳ VPN 라우트 대역 정보를 수집하는 중입니다…')
+    $n.ForeColor = [System.Drawing.Color]::DimGray
+    [void]$tv.Nodes.Add($n)
+    $tv.EndUpdate()
+    return
+  }
+
+  $routeData = Build-RouteTreeNodeData $routes
+  $roots = $routeData.Roots
+  $tree  = $routeData.Tree
+
+  $vpnRootNode = New-Object System.Windows.Forms.TreeNode("🔒 VPN 터널 암호화 대역 (Split Tunnel: $($routes.Count)개 목적지 대역)")
+  $vpnRootNode.ForeColor = [System.Drawing.Color]::DarkGreen
+  $vpnRootNode.NodeFont = New-Object System.Drawing.Font($tv.Font, [System.Drawing.FontStyle]::Bold)
+  [void]$tv.Nodes.Add($vpnRootNode)
+
+  function Add-TreeNode($x, $parentCollection) {
+    $hint = Get-RangeHint $x.N
+    $isVirtual = $x.Virtual
+    $kind = $x.Kind
+
+    if ($isVirtual) {
+      $label = "📁 [$($x.N.Prefix)]  $("$kind $hint".Trim())"
+    } elseif ($kind) {
+      $label = "🔒 $($x.N.Prefix)  ($kind $hint 전체)"
+    } else {
+      $label = "🔒 $($x.N.Prefix)  ($hint)"
+    }
+
+    $tNode = New-Object System.Windows.Forms.TreeNode($label)
+    $tNode.Tag = $x.N.Prefix
+
+    if ($isVirtual) {
+      $tNode.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+    } else {
+      $tNode.ForeColor = [System.Drawing.Color]::DarkGreen
+      $tNode.NodeFont = New-Object System.Drawing.Font($tv.Font, [System.Drawing.FontStyle]::Bold)
+    }
+
+    [void]$parentCollection.Add($tNode)
+
+    if ($tree.ContainsKey($x.N.Prefix)) {
+      $kids = @($tree[$x.N.Prefix] | Where-Object { $_ } | Sort-Object { $_.N.Net }, { $_.N.Len })
+      foreach ($k in $kids) {
+        Add-TreeNode $k $tNode.Nodes
+      }
+    }
+  }
+
+  foreach ($r in $roots) {
+    Add-TreeNode $r $vpnRootNode.Nodes
+  }
+
+  if ($repObj.InetPath) {
+    $inetNode = New-Object System.Windows.Forms.TreeNode("🌐 그 외 트래픽 (인터넷 등 0.0.0.0/0) ➔ $($repObj.InetPath) [직접 연결]")
+    $inetNode.ForeColor = [System.Drawing.Color]::FromArgb(0, 102, 204)
+    $inetNode.NodeFont = New-Object System.Drawing.Font($tv.Font, [System.Drawing.FontStyle]::Bold)
+    [void]$tv.Nodes.Add($inetNode)
+  }
+
+  $tv.ExpandAll()
+  $tv.EndUpdate()
+}
+
+function Update-FlowBanner($repObj) {
+  if (-not $repObj -or $repObj.State -eq 'None') {
+    $lblFlow.Text = '  프로필을 선택하면 네트워크 흐름 및 계층도가 표시됩니다.'
+    $lblFlow.ForeColor = [System.Drawing.Color]::DimGray
+    $pnlFlow.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+    return
+  }
+
+  switch ($repObj.State) {
+    'Connected' {
+      $vpnIp = if ($repObj.VpnIP) { $repObj.VpnIP } else { '터널 활성' }
+      $routesTxt = if ($repObj.IsFullTunnel) { '전체 트래픽 암호화 (Full)' } else { "$($repObj.Routes.Count)개 대역 분할 암호화" }
+      $lblFlow.Text = "  [내 PC] ━━(물리망)━━▶ [🔒 VPN: $vpnIp] ━━▶ [🏢 사설 업무망: $routesTxt]"
+      $lblFlow.ForeColor = [System.Drawing.Color]::DarkGreen
+      $pnlFlow.BackColor = [System.Drawing.Color]::FromArgb(236, 247, 238)
+    }
+    'Connecting' {
+      $lblFlow.Text = '  [내 PC] ──(인증 및 암호화 터널 어댑터 협상 중)──▶ [VPN 서버]'
+      $lblFlow.ForeColor = [System.Drawing.Color]::DarkGoldenrod
+      $pnlFlow.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 235)
+    }
+    default {
+      $lblFlow.Text = '  [내 PC] ━━(로컬 이더넷 / Wi-Fi 직접 연결)━━▶ 🌐 일반 인터넷'
+      $lblFlow.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+      $pnlFlow.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+    }
+  }
+}
+
 function Get-NetworkReport($p) {
-  if (-not $p) { return '프로필을 선택하세요.' }
+  if (-not $p) {
+    return [pscustomobject]@{
+      Text         = '프로필을 선택하세요.'
+      State        = 'None'
+      Routes       = @()
+      Adapter      = ''
+      VpnIP        = ''
+      DNS          = ''
+      IsFullTunnel = $false
+      InetPath     = ''
+      GWPath       = ''
+      Profile      = ''
+    }
+  }
   $sb = New-Object System.Text.StringBuilder
   $state = Get-ConnState $p
   [void]$sb.AppendLine("■ $($p.Display)   ($($p.Proto) · $($p.Host):$($p.Port))")
@@ -306,19 +503,27 @@ function Get-NetworkReport($p) {
   [void]$sb.AppendLine('')
 
   $gw = Resolve-IPv4 $p.Host
+  $gwPath = if ($gw) { Format-Path (Get-PathTo $gw) } else { '' }
   [void]$sb.AppendLine('▶ VPN 서버까지 사용하는 네트워크')
-  if ($gw) { [void]$sb.AppendLine("  $(Format-Path (Get-PathTo $gw))") }
+  if ($gw) { [void]$sb.AppendLine("  $gwPath") }
   else { [void]$sb.AppendLine("  $($p.Host) 주소를 확인할 수 없음 (DNS)") }
   [void]$sb.AppendLine('')
 
   $ad = if ($state -ne 'Disconnected') { Get-TunnelAdapter $p } else { $null }
+  $routes = @()
+  $ipStr = ''
+  $dns = @()
+  $full = $false
+  $other = ''
+
   if ($ad) {
     $t = Get-TunnelRoutes $ad
+    $routes = @($t.Routes)
     $ipStr = ($t.IPs | ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength)" }) -join ', '
     [void]$sb.AppendLine("▶ VPN 터널 어댑터: $($ad.Name)  (내 VPN IP: $ipStr)")
     $dns = @((Get-DnsClientServerAddress -InterfaceIndex $ad.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
     if ($dns.Count -gt 0) { [void]$sb.AppendLine("  VPN DNS: $($dns -join ', ')") }
-    $full = $t.Routes | Where-Object { $_ -eq '0.0.0.0/0' -or $_ -eq '0.0.0.0/1' -or $_ -eq '128.0.0.0/1' }
+    $full = [bool]($t.Routes | Where-Object { $_ -eq '0.0.0.0/0' -or $_ -eq '0.0.0.0/1' -or $_ -eq '128.0.0.0/1' })
     [void]$sb.AppendLine('')
     if ($full) {
       [void]$sb.AppendLine('▶ 모든 트래픽이 VPN으로 갑니다 (Full tunnel)')
@@ -342,7 +547,19 @@ function Get-NetworkReport($p) {
   } else {
     [void]$sb.AppendLine('▶ 연결되어 있지 않아 모든 트래픽이 일반 네트워크를 사용합니다.')
   }
-  return $sb.ToString()
+
+  return [pscustomobject]@{
+    Text         = $sb.ToString()
+    State        = $state
+    Routes       = $routes
+    Adapter      = if ($ad) { $ad.Name } else { '' }
+    VpnIP        = $ipStr
+    DNS          = ($dns -join ', ')
+    IsFullTunnel = $full
+    InetPath     = $other
+    GWPath       = $gwPath
+    Profile      = $p.Display
+  }
 }
 
 # ============================================================================
@@ -474,13 +691,63 @@ $btnLog        = New-Btn '로그 보기'
 $btnRefresh    = New-Btn '새로고침'
 $layout.Controls.Add($btnBar, 0, 1)
 
-# Row 2: network report
+# Row 2: network report & visual hierarchy
 $grp = New-Object System.Windows.Forms.GroupBox
 $grp.Text = '이 연결이 사용하는 네트워크'; $grp.Dock = 'Fill'
+
+$tcNet = New-Object System.Windows.Forms.TabControl
+$tcNet.Dock = 'Fill'
+$tcNet.Font = $font
+
+# Tab 1: 그래픽 계층도 (Visual Tree & Flow)
+$tabVisual = New-Object System.Windows.Forms.TabPage
+$tabVisual.Text = '그래픽 계층도'
+$tabVisual.UseVisualStyleBackColor = $true
+
+$pnlVisual = New-Object System.Windows.Forms.TableLayoutPanel
+$pnlVisual.Dock = 'Fill'; $pnlVisual.ColumnCount = 1; $pnlVisual.RowCount = 2
+[void]$pnlVisual.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('Absolute', 38)))
+[void]$pnlVisual.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('Percent', 100)))
+
+# Flow Banner
+$pnlFlow = New-Object System.Windows.Forms.Panel
+$pnlFlow.Dock = 'Fill'; $pnlFlow.Margin = New-Object System.Windows.Forms.Padding(2, 4, 2, 4)
+$pnlFlow.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+$pnlFlow.BorderStyle = 'FixedSingle'
+$lblFlow = New-Object System.Windows.Forms.Label
+$lblFlow.Dock = 'Fill'; $lblFlow.TextAlign = 'MiddleLeft'
+$lblFlow.Padding = New-Object System.Windows.Forms.Padding(8, 0, 8, 0)
+$lblFlow.Font = New-Object System.Drawing.Font($font.FontFamily, 9.0, [System.Drawing.FontStyle]::Bold)
+$lblFlow.ForeColor = [System.Drawing.Color]::DimGray
+$lblFlow.Text = '  프로필을 선택하면 네트워크 흐름 및 계층도가 표시됩니다.'
+$pnlFlow.Controls.Add($lblFlow)
+$pnlVisual.Controls.Add($pnlFlow, 0, 0)
+
+# TreeView for Route Hierarchy
+$tvRoutes = New-Object System.Windows.Forms.TreeView
+$tvRoutes.Dock = 'Fill'
+$tvRoutes.Font = New-Object System.Drawing.Font($font.FontFamily, 9.25)
+$tvRoutes.ShowLines = $true
+$tvRoutes.ShowPlusMinus = $true
+$tvRoutes.ShowRootLines = $true
+$tvRoutes.HotTracking = $true
+$tvRoutes.BorderStyle = 'FixedSingle'
+$pnlVisual.Controls.Add($tvRoutes, 0, 1)
+
+$tabVisual.Controls.Add($pnlVisual)
+$tcNet.TabPages.Add($tabVisual)
+
+# Tab 2: 텍스트 요약 (Text report)
+$tabText = New-Object System.Windows.Forms.TabPage
+$tabText.Text = '텍스트 요약'
+$tabText.UseVisualStyleBackColor = $true
 $txt = New-Object System.Windows.Forms.TextBox
 $txt.Multiline = $true; $txt.ReadOnly = $true; $txt.ScrollBars = 'Vertical'; $txt.Dock = 'Fill'
 $txt.Font = $monoFont; $txt.BackColor = [System.Drawing.SystemColors]::Window; $txt.WordWrap = $false
-$grp.Controls.Add($txt)
+$tabText.Controls.Add($txt)
+$tcNet.TabPages.Add($tabText)
+
+$grp.Controls.Add($tcNet)
 $layout.Controls.Add($grp, 0, 2)
 
 # Row 3: route lookup
@@ -566,7 +833,7 @@ function Update-Buttons {
 # The report queries routing/adapters (seconds on a cold start), so it runs in a
 # background runspace; Complete-Report (500 ms timer) puts the result on screen.
 $script:reportFns = @('Get-TunnelAdapter', 'Get-ConnState', 'Get-StateText', 'Resolve-IPv4', 'Get-PathTo', 'Format-Path',
-  'Get-TunnelRoutes', 'ConvertTo-Net', 'Test-NetContains', 'Get-RangeHint', 'Format-RouteTree', 'Get-NetworkReport')
+  'Get-TunnelRoutes', 'ConvertTo-Net', 'Test-NetContains', 'Get-RangeHint', 'Format-RouteTree', 'Build-RouteTreeNodeData', 'Get-NetworkReport')
 $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault2()
 foreach ($fn in $script:reportFns) {
   $iss.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry($fn, (Get-Command $fn -CommandType Function).Definition)))
@@ -597,14 +864,37 @@ function Complete-Report {
   if (-not $script:reportAr -or -not $script:reportAr.IsCompleted) { return }
   try {
     $res = $script:reportPs.EndInvoke($script:reportAr)
-    $new = ([string]($res | Select-Object -First 1)) -replace "`r?`n", "`r`n"
-    if ($script:reportPs.Streams.Error.Count -gt 0 -and -not $new) { $new = "네트워크 정보 오류: $($script:reportPs.Streams.Error[0])" }
-  } catch { $new = "네트워크 정보 오류: $($_.Exception.Message)" }
+    $first = $res | Select-Object -First 1
+    if ($first -is [string]) {
+      $new = $first -replace "`r?`n", "`r`n"
+      $repObj = [pscustomobject]@{ Text = $new; State = 'None'; Routes = @() }
+    } elseif ($first) {
+      $new = ([string]$first.Text) -replace "`r?`n", "`r`n"
+      $repObj = $first
+    } else {
+      $new = '네트워크 정보를 확인할 수 없습니다.'
+      $repObj = [pscustomobject]@{ Text = $new; State = 'None'; Routes = @() }
+    }
+    if ($script:reportPs.Streams.Error.Count -gt 0 -and -not $new) {
+      $new = "네트워크 정보 오류: $($script:reportPs.Streams.Error[0])"
+      $repObj = [pscustomobject]@{ Text = $new; State = 'None'; Routes = @() }
+    }
+  } catch {
+    $new = "네트워크 정보 오류: $($_.Exception.Message)"
+    $repObj = [pscustomobject]@{ Text = $new; State = 'None'; Routes = @() }
+  }
   $script:reportPs.Dispose(); $script:reportPs = $null; $script:reportAr = $null
   $sel = Get-Selected
   $selName = if ($sel) { $sel.Name } else { '' }
   if ($selName -eq $script:reportFor) {
-    if ($new -ne $txt.Text) { $keep = $txt.SelectionStart; $txt.Text = $new; $txt.SelectionStart = [Math]::Min($keep, $new.Length) }
+    if ($new -ne $txt.Text) {
+      $keep = $txt.SelectionStart
+      $txt.Text = $new
+      $txt.SelectionStart = [Math]::Min($keep, $new.Length)
+    }
+    Populate-RouteTreeView $tvRoutes $repObj
+    Update-FlowBanner $repObj
+
     $script:lastReport = Get-Date
     # Connected but routes not installed yet → look again shortly
     if ($new -match 'Split tunnel, 0개' -or $new -match '터널 어댑터가 아직') { $script:refreshAt += (Get-Date).AddSeconds(5) }
@@ -782,9 +1072,37 @@ $doLookup = {
   $pt = Get-PathTo $ip
   $lblLookRes.Text = "$ip → $(Format-Path $pt)"
   $lblLookRes.ForeColor = if ($pt -and $pt.IsVpn) { $stateColors.Connected } else { [System.Drawing.Color]::Black }
+
+  if ($pt -and $pt.IsVpn -and $pt.Route) {
+    $targetPrefix = $pt.Route.DestinationPrefix
+    $findNode = $null
+    $findNode = {
+      param($nodes)
+      foreach ($n in $nodes) {
+        if ($n.Tag -eq $targetPrefix) {
+          $tvRoutes.SelectedNode = $n
+          $n.EnsureVisible()
+          return $true
+        }
+        if (& $findNode $n.Nodes) { return $true }
+      }
+      return $false
+    }
+    & $findNode $tvRoutes.Nodes | Out-Null
+  }
 }
 $btnLook.Add_Click($doLookup)
 $tbLook.Add_KeyDown({ if ($_.KeyCode -eq 'Enter') { $_.SuppressKeyPress = $true; & $doLookup } })
+
+$tvRoutes.Add_AfterSelect({
+  if ($tvRoutes.SelectedNode -and $tvRoutes.SelectedNode.Tag) {
+    $pfx = [string]$tvRoutes.SelectedNode.Tag
+    $firstIp = $pfx.Split('/')[0]
+    if ($firstIp -notin @('10.0.0.0', '172.16.0.0', '192.168.0.0')) {
+      $tbLook.Text = $firstIp
+    }
+  }
+})
 
 $chkAuto.Add_Click({
     try { Set-AutoStart $chkAuto.Checked }

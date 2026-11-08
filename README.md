@@ -1,6 +1,6 @@
 # Easy OpenConnectSg
 
-> **[sparklings/openconnectsg](https://github.com/sparklings/openconnectsg)의 포크입니다.** 원본 CLI 기능을 그대로 쓰면서 **트레이 UI**(클릭으로 연결/해제, 연결이 쓰는 네트워크와 VPN 대역 계층도 보기)를 추가하고, 재부팅 시 여러 터널이 함께 자동 시작되던 문제를 고쳤습니다. 원본과 같은 [MIT License](LICENSE)를 따릅니다.
+> **[sparklings/openconnectsg](https://github.com/sparklings/openconnectsg)의 포크입니다.** 원본 CLI 기능을 그대로 쓰면서 **트레이 UI**(클릭으로 연결/해제, 실시간 네트워크 흐름 배너와 인터랙티브 그래픽 대역 계층도/트리 보기)를 추가하고, 재부팅 시 여러 터널이 함께 자동 시작되던 문제를 고쳤습니다. 원본과 같은 [MIT License](LICENSE)를 따릅니다.
 
 > PowerShell automation wrapper for OpenConnect on Windows: DPAPI-secured, NSSM background service daemon with Wintun support and multi-profile management.
 
@@ -55,7 +55,7 @@ $d="$env:TEMP\easy-ocsg"; irm https://github.com/sarangks2/easy-openconnectsg/ar
 * **DPAPI 비밀번호 암호화 보관**: Windows DPAPI(`LocalMachine`)를 통해 암호를 `pw.bin`에 암호화 저장하고 `icacls`로 접근을 통제
 * **Wintun 커널 터널링**: WireGuard Wintun 고속 가상 인터페이스와 `vpnc-script-win.js`를 통한 안정적인 Split Routing 구성
 * **단일 터널 보장**: 전역 뮤텍스로 세션 충돌을 원천 방지
-* **트레이 UI**: 클릭으로 연결/해제하고, 연결이 쓰는 네트워크(Wi-Fi/이더넷, VPN IP, VPN 대역 목록과 계층도)와 특정 주소가 나가는 경로를 확인
+* **트레이 UI**: 클릭으로 연결/해제하고, 연결이 쓰는 네트워크와 실시간 네트워크 흐름 배너, 인터랙티브 그래픽 계층도(TreeView 대역별 접기/펼치기) 및 특정 주소 경로 확인
 
 ---
 
